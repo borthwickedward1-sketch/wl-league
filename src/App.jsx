@@ -240,13 +240,13 @@ export default function PoolLeague() {
     return draft.managers
       .filter((m) => m.teams.every(Boolean))
       .map((m) => ({ ...m, stats: statsFor(m.teams, records) }))
-      .sort((a, b) => a.stats.winPct - b.stats.winPct);
+      .sort((a, b) => a.stats.wins - b.stats.wins);
   }, [draft, records]);
 
   const totalGames = board.reduce((s, m) => s + m.stats.games, 0);
   const seasonStarted = totalGames > 0;
-  const lowLeaders = board.length ? board.filter((m) => m.stats.winPct === board[0].stats.winPct) : [];
-  const highLeaders = board.length ? board.filter((m) => m.stats.winPct === board[board.length - 1].stats.winPct) : [];
+  const lowLeaders = board.length ? board.filter((m) => m.stats.wins === board[0].stats.wins) : [];
+  const highLeaders = board.length ? board.filter((m) => m.stats.wins === board[board.length - 1].stats.wins) : [];
   const lowIds = new Set(lowLeaders.map((m) => m.id));
   const highIds = new Set(highLeaders.map((m) => m.id));
 
@@ -479,8 +479,8 @@ export default function PoolLeague() {
       <SpectrumBar board={board} />
 
       <div className="pl-poles">
-        <PoleCard label="Basement Champion" sub="Lowest combined win rate wins this pole" icon={<Skull size={18} />} tone="rust" managers={lowLeaders} />
-        <PoleCard label="Win Machine" sub="Highest combined win rate wins this pole" icon={<Trophy size={18} />} tone="gold" managers={highLeaders} />
+        <PoleCard label="Basement Champion" sub="Fewest combined wins takes this pole" icon={<Skull size={18} />} tone="rust" managers={lowLeaders} />
+        <PoleCard label="Win Machine" sub="Most combined wins takes this pole" icon={<Trophy size={18} />} tone="gold" managers={highLeaders} />
       </div>
 
       <BoardTable board={board} lowIds={lowIds} highIds={highIds} />
@@ -535,14 +535,14 @@ function Shell({ children }) {
 
 function SpectrumBar({ board }) {
   if (board.length === 0) return null;
-  const sorted = [...board].sort((a, b) => b.stats.winPct - a.stats.winPct);
+  const sorted = [...board].sort((a, b) => b.stats.wins - a.stats.wins);
 
-  // Scale the track to the actual spread of win% this season, rather than a
-  // fixed 0-100 range, so differences between managers are easier to see.
-  const pcts = sorted.map((m) => m.stats.winPct);
-  let domainMin = Math.min(...pcts);
-  let domainMax = Math.max(...pcts);
-  if (domainMin === domainMax) { domainMin -= 0.05; domainMax += 0.05; } // avoid a zero-width scale
+  // Scale the track to the actual spread of total wins this season, rather
+  // than a fixed range, so differences between managers are easier to see.
+  const winCounts = sorted.map((m) => m.stats.wins);
+  let domainMin = Math.min(...winCounts);
+  let domainMax = Math.max(...winCounts);
+  if (domainMin === domainMax) { domainMin -= 1; domainMax += 1; } // avoid a zero-width scale
   const domainMid = (domainMin + domainMax) / 2;
   const span = domainMax - domainMin;
   const posOf = (v) => ((v - domainMin) / span) * 100;
@@ -553,18 +553,18 @@ function SpectrumBar({ board }) {
       <div className="pl-barHeaderRow">
         <span />
         <div className="pl-barScale">
-          <span>{pct(domainMin)}</span><span>{pct(domainMid)}</span><span>{pct(domainMax)}</span>
+          <span>{domainMin} wins</span><span>{domainMid.toFixed(1)}</span><span>{domainMax} wins</span>
         </div>
         <span />
       </div>
       <div className="pl-barsWrap">
         {sorted.map((m) => {
-          const valuePos = posOf(m.stats.winPct);
-          const above = m.stats.winPct >= domainMid;
+          const valuePos = posOf(m.stats.wins);
+          const above = m.stats.wins >= domainMid;
           const left = Math.min(centerPos, valuePos);
           const width = Math.max(0, Math.abs(valuePos - centerPos));
           return (
-            <div className="pl-barRow" key={m.id} title={`${m.name}: ${pct(m.stats.winPct)}`}>
+            <div className="pl-barRow" key={m.id} title={`${m.name}: ${m.stats.wins} wins`}>
               <div className="pl-barName">{m.name}</div>
               <div className="pl-barTrack">
                 <div className="pl-barCenterLine" style={{ left: `${centerPos}%` }} />
@@ -573,7 +573,7 @@ function SpectrumBar({ board }) {
                   style={{ left: `${left}%`, width: `${width}%` }}
                 />
               </div>
-              <div className="pl-barPct">{pct(m.stats.winPct)}</div>
+              <div className="pl-barPct">{m.stats.wins}W</div>
             </div>
           );
         })}
@@ -591,7 +591,7 @@ function PoleCard({ label, sub, icon, tone, managers }) {
       {managers && managers.length > 0 ? (
         <>
           <div className="pl-poleStat">
-            {pct(managers[0].stats.winPct)}
+            {managers[0].stats.wins} <span className="pl-poleStatUnit">wins</span>
             {managers.length > 1 && <span className="pl-poleTieNote">{managers.length}-way tie</span>}
           </div>
           <div className="pl-poleManagers">
@@ -623,7 +623,7 @@ function BoardTable({ board, lowIds, highIds }) {
     <div className="pl-standings">
       <div className="pl-standingsHeader">
         <span>Manager</span>
-        <span>Record · Win %</span>
+        <span>Record · Wins</span>
       </div>
       {[...board].reverse().map((m) => (
         <div
@@ -642,8 +642,8 @@ function BoardTable({ board, lowIds, highIds }) {
                 <span className="pl-statValue">{recordStr(m.stats)}</span>
               </div>
               <div className="pl-statBlock">
-                <span className="pl-statLabel">Win %</span>
-                <span className="pl-statValue">{pct(m.stats.winPct)}</span>
+                <span className="pl-statLabel">Wins</span>
+                <span className="pl-statValue">{m.stats.wins}</span>
               </div>
             </div>
           </div>
@@ -1032,6 +1032,7 @@ const CSS = `
 .pl-poleLabel { font-family: 'Anton', sans-serif; font-size: 18px; letter-spacing: 0.02em; }
 .pl-poleSub { color: var(--muted); font-size: 12px; margin: 2px 0 12px; }
 .pl-poleStat { font-family: 'JetBrains Mono', monospace; font-size: 22px; margin: 2px 0 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pl-poleStatUnit { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); }
 .pl-poleTieNote { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .pl-poleManagers { display: flex; flex-direction: column; gap: 10px; }
 .pl-poleManagerBlock + .pl-poleManagerBlock { padding-top: 10px; border-top: 1px dashed var(--line); }
